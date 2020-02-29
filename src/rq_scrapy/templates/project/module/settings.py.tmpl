@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Scrapy settings for $project_name project
+# RQ-Scrapy settings for $project_name project
 #
 # For simplicity, this file contains only settings considered important or
 # commonly used. You can find more settings consulting the documentation:
@@ -8,6 +8,7 @@
 #     https://docs.scrapy.org/en/latest/topics/settings.html
 #     https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
 #     https://docs.scrapy.org/en/latest/topics/spider-middleware.html
+#     https://github.com/cfhamlet/os-rq-scrapy
 
 BOT_NAME = '$project_name'
 
@@ -15,6 +16,9 @@ SPIDER_MODULES = ['$project_name.spiders']
 NEWSPIDER_MODULE = '$project_name.spiders'
 
 RQ_API = "http://localhost:6789/"
+
+# RQ API timeout
+#RQ_TIMEOUT = 10
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 #USER_AGENT = '$project_name (+http://www.yourdomain.com)'

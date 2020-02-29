@@ -1,4 +1,4 @@
-from os.path import join
+from os.path import abspath, dirname, join
 
 from scrapy.commands.startproject import Command as ScrapyCommand
 
@@ -6,6 +6,10 @@ import rq_scrapy
 
 
 class Command(ScrapyCommand):
+    default_settings = {
+        "TEMPLATES_DIR": abspath(join(dirname(__file__), "..", "templates"))
+    }
+
     def short_desc(self):
         return "Create new rq-scrapy project"
 
