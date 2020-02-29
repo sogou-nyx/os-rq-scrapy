@@ -1,7 +1,9 @@
 import asyncio
 import random
 
+from scrapy.core.scheduler import Scheduler as ScrapyScheduler
 from scrapy.utils.log import logger
+from twisted.internet import defer
 
 from rq_scrapy.utils.asyncio_defer import as_deferred
 from rq_scrapy.utils.rqdata import queues_from_rq, request_from_rq
@@ -19,6 +21,7 @@ class Scheduler(object):
         self.active_request_count = 0
         self.lock = asyncio.Lock()
         self.queues = set()
+        self.scheduler = ScrapyScheduler.from_crawler(crawler)
 
     @classmethod
     def from_crawler(cls, crawler):
@@ -84,6 +87,7 @@ class Scheduler(object):
                 return None
             request = await self.get_request_from_rq(qid)
             if request:
+                self.stats.inc_value("scheduler/dequeued/rq", spider=self.spider)
                 return request
 
     async def get_request(self):
@@ -95,24 +99,30 @@ class Scheduler(object):
                 extra={"spider": self.spider},
             )
 
-    def next_request_deferred(self):
+    def next_request(self):
         if self.active_request_count >= self.max_concurrent:
             return None
         self.incr_active_request(1)
-        d = as_deferred(self.get_request())
+        d = None
+        if self.scheduler.has_pending_requests():
+            d = defer.Deferred()
+            d.callback(self.scheduler.next_request())
+        else:
+            d = as_deferred(self.get_request())
         return d
 
     def incr_active_request(self, d):
         self.active_request_count += d
 
     def enqueue_request(self, request):
-        print(22222, request)
+        return self.scheduler.enqueue_request(request)
 
     def open(self, spider):
         self.spider = spider
+        return self.scheduler.open(spider)
 
     def close(self, reason):
-        pass
+        return self.scheduler.close(reason)
 
     def has_pending_requests(self):
         return True

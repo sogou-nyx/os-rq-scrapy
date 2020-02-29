@@ -43,7 +43,7 @@ class Engine(ExecutionEngine):
 
     def _next_request_from_scheduler(self, spider):
         slot = self.slot
-        d = slot.scheduler.next_request_deferred()
+        d = slot.scheduler.next_request()
         if not d:
             return
         d.addCallback(self._scrapy_next_request_from_scheduler, spider)
