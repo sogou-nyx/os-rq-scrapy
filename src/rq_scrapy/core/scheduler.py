@@ -1,5 +1,6 @@
 import asyncio
 import random
+import time
 
 from scrapy.core.scheduler import Scheduler as ScrapyScheduler
 from scrapy.utils.log import logger
@@ -18,10 +19,13 @@ class Scheduler(object):
         self.crawler = crawler
         self.stats = stats
         self.max_concurrent = max_concurrent
-        self.active_request_count = 0
+        self.async_schedule_count = 0
         self.lock = asyncio.Lock()
-        self.queues = set()
+        self.pending_queues = set()
         self.scheduler = ScrapyScheduler.from_crawler(crawler)
+        self.queues_expand = True
+        self.update_queues_time = time.time()
+        self.downloader = None
 
     @classmethod
     def from_crawler(cls, crawler):
@@ -32,22 +36,25 @@ class Scheduler(object):
         return cls(rq_api, rq_timeout, max_concurrent, crawler.stats, crawler)
 
     async def update_queues(self):
-        if len(self.queues) >= self.max_concurrent:
+        l = len(self.pending_queues)
+        if l >= self.max_concurrent:
             return
-        updated = self.lock.locked()
-        if updated and len(self.queues) > 0:
+        updating = self.lock.locked()
+        if (updating and l > 0) or not self._needs_update():
             return
         try:
             await self.lock.acquire()
-            if not updated:
+            if not updating:
                 await self.update_queues_from_rq()
         finally:
             self.lock.release()
 
     async def update_queues_from_rq(self):
-        k = 2 * self.max_concurrent - len(self.queues)
+        o = len(self.pending_queues)
+        k = 2 * self.max_concurrent - o
         if k <= 0:
             return
+        k = min(k, 1000)  # rq api limit
         status, ret, api_url = await queues_from_rq(
             self.rq_api, k, timeout=self.rq_timeout
         )
@@ -56,18 +63,25 @@ class Scheduler(object):
             return
 
         queues = set([q["qid"] for q in ret["queues"]])
-        self.queues.update(queues)
+        self.pending_queues.update(queues)
+        l = len(self.pending_queues)
+        if o == l or l <= self.max_concurrent:
+            self.queues_expand = False
+        else:
+            self.queues_expand = True
+        self.update_queues_time = time.time()
+
         logger.debug(
-            "Update queues from %s %d %d" % (api_url, len(queues), len(self.queues))
+            "Update queues from %s o=%d u=%d c=%d" % (api_url, o, len(queues), l)
         )
 
     async def next_queue(self):
         while True:
             await self.update_queues()
-            if not self.queues:
+            if not self.pending_queues:
                 break
-            qid = random.sample(self.queues, 1)[0]
-            self.queues.discard(qid)
+            qid = random.sample(self.pending_queues, 1)[0]
+            self.pending_queues.discard(qid)
             return qid
 
     async def get_request_from_rq(self, qid):
@@ -80,45 +94,63 @@ class Scheduler(object):
         logger.debug("Get request from %s %s" % (api_url, str(ret)))
         return ret
 
-    async def _get_request(self):
+    def _needs_update(self):
+        return self.queues_expand or (time.time() - self.update_queues_time >= 1)
+
+    def free_slot(self, qid):
+        return self.crawler.free_slot(qid)
+
+    async def _get_request_from_rq(self):
         while True:
             qid = await self.next_queue()
             if not qid:
                 return None
             request = await self.get_request_from_rq(qid)
             if request:
+                if not self._needs_update():
+                    self.pending_queues.add(qid)
                 self.stats.inc_value("scheduler/dequeued/rq", spider=self.spider)
                 return request
 
-    async def get_request(self):
+    async def next_request_from_rq(self):
+        request = None
         try:
-            return await self._get_request()
+            request = await self._get_request_from_rq()
         except Exception as e:
             logger.error(
                 "Error while getting new request from rq %s" % str(e),
                 extra={"spider": self.spider},
             )
+        return (request, True)
+
+    def _async_backout(self):
+        limit = min(len(self.pending_queues), self.max_concurrent)
+        if limit <= 0:
+            if self._needs_update():
+                limit = 1
+        return self.async_schedule_count >= limit
 
     def next_request(self):
-        if self.active_request_count >= self.max_concurrent:
-            return None
-        self.incr_active_request(1)
         d = None
         if self.scheduler.has_pending_requests():
             d = defer.Deferred()
-            d.callback(self.scheduler.next_request())
+            d.callback((self.scheduler.next_request(), False))
         else:
-            d = as_deferred(self.get_request())
+            if not self._async_backout():
+                d = as_deferred(self.next_request_from_rq())
+                self.async_schedule_count += 1
         return d
 
-    def incr_active_request(self, d):
-        self.active_request_count += d
+    def release_request(self, request, ayc):
+        if ayc:
+            self.async_schedule_count -= 1
 
     def enqueue_request(self, request):
         return self.scheduler.enqueue_request(request)
 
     def open(self, spider):
         self.spider = spider
+        self.downloader = self.crawler.engine.downloader
         return self.scheduler.open(spider)
 
     def close(self, reason):

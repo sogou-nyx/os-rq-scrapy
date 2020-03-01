@@ -4,14 +4,20 @@ from twisted.internet import defer
 
 
 class Engine(ExecutionEngine):
+    def __init__(self, crawler, spider_closed_callback):
+        super(Engine, self).__init__(crawler, spider_closed_callback)
+        self.total_concurrency = self.crawler.settings.getint("CONCURRENT_REQUESTS")
+        self.scheduling = set()
+
     @defer.inlineCallbacks
     def open_spider(self, spider, start_requests=(), close_if_idle=False):
         yield super(Engine, self).open_spider(spider, start_requests, close_if_idle)
 
-    def _scrapy_next_request_from_scheduler(self, request, spider):
+    def _schedule_request(self, request_async, spider):
         slot = self.slot
+        request, ayc = request_async
         if not request:
-            slot.scheduler.incr_active_request(-1)
+            slot.scheduler.release_request(request, ayc)
             return
         d = self._download(request, spider)
         d.addBoth(self._handle_downloader_output, request, spider)
@@ -23,7 +29,7 @@ class Engine(ExecutionEngine):
             )
         )
         d.addBoth(lambda _: slot.remove_request(request))
-        d.addBoth(lambda _: slot.scheduler.incr_active_request(-1))
+        d.addBoth(lambda _: slot.scheduler.release_request(request, ayc))
         d.addErrback(
             lambda f: logger.info(
                 "Error while removing request from slot",
@@ -46,7 +52,9 @@ class Engine(ExecutionEngine):
         d = slot.scheduler.next_request()
         if not d:
             return
-        d.addCallback(self._scrapy_next_request_from_scheduler, spider)
+        self.scheduling.add(d)
+        d.addCallback(self._schedule_request, spider)
+        d.addBoth(lambda _: self.scheduling.discard(d))
         d.addErrback(
             lambda f: logger.info(
                 "Error while scheduing new request from rq",
@@ -55,3 +63,9 @@ class Engine(ExecutionEngine):
             )
         )
         return d
+
+    def _needs_backout(self, spider):
+        return (
+            super(Engine, self)._needs_backout(spider)
+            or len(self.scheduling) >= self.total_concurrency
+        )
