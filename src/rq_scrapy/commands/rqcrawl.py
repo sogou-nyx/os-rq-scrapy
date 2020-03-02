@@ -8,6 +8,7 @@ class Command(ScrapyCommand):
     default_settings = {
         "SCHEDULER": "rq_scrapy.core.scheduler.Scheduler",
         "DOWNLOADER": "rq_scrapy.core.downloader.Downloader",
+        "REACTOR_THREADPOOL_MAXSIZE": 20,
         "RQ_API": "http://localhost:6789/",
         "RQ_TIMEOUT": 10,
     }

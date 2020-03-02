@@ -1,0 +1,10 @@
+[run]
+parallel = true
+branch = true
+source = rq_scrapy
+
+[paths]
+source =
+    src/rq_scrapy
+    .tox/*/lib/python*/site-packages/rq_scrapy
+    .tox/*/site-packages/rq_scrapy
