@@ -138,7 +138,7 @@ def _execute(argv=None, settings=None):
     opts, args = parser.parse_args(args=argv[1:])
     _run_print_help(parser, cmd.process_options, args, opts)
 
-    if cmdname != "rqcrawl":
+    if cmdname != "crawl" or not settings.get("RQ_API", None):
         cmd.crawler_process = CrawlerProcess(settings)
     _run_print_help(parser, _run_command, cmd, args, opts)
     sys.exit(cmd.exitcode)
