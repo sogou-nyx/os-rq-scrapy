@@ -16,7 +16,7 @@ The os-rq-scrapy and [os-go-rq](https://github.com/cfhamlet/os-go-rq) project ar
 ## Requirements
 
 * Python 3.6+ (pypy3.6+)
-* [Scrapy](https://github.com/scrapy/scrapy) 1.8.0+
+* [Scrapy](https://github.com/scrapy/scrapy) 2.0
 
 extra requirements:
 

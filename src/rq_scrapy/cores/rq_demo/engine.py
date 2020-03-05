@@ -13,12 +13,10 @@ class Engine(ExecutionEngine):
     def open_spider(self, spider, start_requests=(), close_if_idle=False):
         yield super(Engine, self).open_spider(spider, start_requests, close_if_idle)
 
-    def _schedule_request(self, request_async, spider):
-        slot = self.slot
-        request, ayc = request_async
+    def _process_request_from_scheduler(self, request, spider):
         if not request:
-            slot.scheduler.release_request(request, ayc)
             return
+        slot = self.slot
         d = self._download(request, spider)
         d.addBoth(self._handle_downloader_output, request, spider)
         d.addErrback(
@@ -29,7 +27,6 @@ class Engine(ExecutionEngine):
             )
         )
         d.addBoth(lambda _: slot.remove_request(request))
-        d.addBoth(lambda _: slot.scheduler.release_request(request, ayc))
         d.addErrback(
             lambda f: logger.info(
                 "Error while removing request from slot",
@@ -53,11 +50,11 @@ class Engine(ExecutionEngine):
         if not d:
             return
         self.scheduling.add(d)
-        d.addCallback(self._schedule_request, spider)
+        d.addCallback(self._process_request_from_scheduler, spider)
         d.addBoth(lambda _: self.scheduling.discard(d))
         d.addErrback(
             lambda f: logger.info(
-                "Error while scheduing new request from rq",
+                "Error while scheduing new deferred request",
                 exc_info=failure_to_exc_info(f),
                 extra={"spider": spider},
             )

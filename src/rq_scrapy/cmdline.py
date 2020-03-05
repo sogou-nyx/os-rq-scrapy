@@ -1,15 +1,10 @@
-import asyncio
 import cProfile
 import optparse
 import os
 import sys
 
-# do not move `asyncioreactor.install`
-from twisted.internet import asyncioreactor
-
-asyncioreactor.install(asyncio.get_event_loop())
-
 from scrapy.cmdline import (
+    garbage_collect,
     _get_commands_from_entry_points,
     _get_commands_from_module,
     _pop_command_name,
@@ -138,7 +133,15 @@ def _execute(argv=None, settings=None):
     opts, args = parser.parse_args(args=argv[1:])
     _run_print_help(parser, cmd.process_options, args, opts)
 
-    if cmdname != "crawl" or not settings.get("RQ_API", None):
-        cmd.crawler_process = CrawlerProcess(settings)
+    cmd.crawler_process = CrawlerProcess(settings)
     _run_print_help(parser, _run_command, cmd, args, opts)
     sys.exit(cmd.exitcode)
+
+
+if __name__ == "__main__":
+    try:
+        execute()
+    finally:
+        # Twisted prints errors in DebugInfo.__del__, but PyPy does not run gc.collect()
+        # on exit: http://doc.pypy.org/en/latest/cpython_differences.html?highlight=gc.collect#differences-related-to-garbage-collection-strategies
+        garbage_collect()
