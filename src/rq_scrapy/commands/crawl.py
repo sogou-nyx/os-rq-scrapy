@@ -15,21 +15,17 @@ class Command(ScrapyCommand):
             metavar="CRAWLER_CLASS",
             help=(
                 "set crawler class. "
-                "choose from %r for short."
-                "(default 'scrapy' when RQ_API is not configured.) "
+                "choose from %r "
+                "default 'scrapy' if RQ_API is not configured. "
                 "crawler class path is also acceptable"
             )
-            % list(self.crawlers.keys()),
+            % list(self.crawlers),
         )
         parser.add_option(
             "-r",
             "--rq-api",
             metavar="RQ_API",
-            help=(
-                "set rq-api. "
-                "(default: http://localhost:6789/) "
-                "the default crawler class is 'rq-demo'"
-            ),
+            help=("set rq api uri. " "the default crawler class will be 'rq-demo'"),
         )
 
     def process_options(self, args, opts):
@@ -42,6 +38,11 @@ class Command(ScrapyCommand):
 
         if self.settings.get("RQ_API", None):
             self.settings.set("CRAWLER_CLASS", "rq-demo", "command")
+            self.settings.set(
+                "TWISTED_REACTOR",
+                "twisted.internet.asyncioreactor.AsyncioSelectorReactor",
+                "command",
+            )
 
     def _create_crawler(self, spname):
         c = self.settings.get("CRAWLER_CLASS")
@@ -67,12 +68,9 @@ class Command(ScrapyCommand):
         spname = args[0]
 
         crawler = self._create_crawler(spname)
+        logger.debug("Crawler %s.%s" % (crawler.__module__, crawler.__class__.__name__))
 
-        logger.debug("Crawler %s" % crawler.__module__)
-
-        crawl_defer = self.crawler_process.crawl(
-            self._create_crawler(spname), **opts.spargs
-        )
+        crawl_defer = self.crawler_process.crawl(crawler, **opts.spargs)
 
         if getattr(crawl_defer, "result", None) is not None and issubclass(
             crawl_defer.result.type, Exception

@@ -1,7 +1,7 @@
 from scrapy.core.scheduler import Scheduler as ScrapyScheduler
 from twisted.internet import defer
 
-from rq_scrapy.crawlers.rq_demo.dsync_rq import DeferredAsyncRQ
+from rq_scrapy.cores.rq_demo.rq import DeferredAsyncRQ
 
 
 class Scheduler(object):
@@ -32,6 +32,7 @@ class Scheduler(object):
                         self.stats.inc_value(
                             "scheduler/dequeued/rq", spider=self.spider
                         )
+                    return request
 
                 d.addCallback(_stats)
         return d

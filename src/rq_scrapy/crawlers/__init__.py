@@ -28,7 +28,7 @@ def _iter_crawler_classes(module_name):
 def get_crawlers_dict(module):
     d = {}
     for mode in _iter_crawler_classes(module):
-        name = mode.__module__.split(".")[-1]
+        name = mode.__module__.split(".")[-1].replace("_", "-")
         if hasattr(mode, "name"):
             name = mode.name
         d[name] = mode

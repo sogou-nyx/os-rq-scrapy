@@ -1,13 +1,11 @@
 from scrapy.crawler import Crawler as ScrapyCrawler
 from scrapy.settings import Settings
 
-from rq_scrapy.crawlers.rq_demo.engine import Engine
+from rq_scrapy.cores.rq_demo.engine import Engine
 
 default_settings = {
-    "SCHEDULER": "rq_scrapy.crawlers.rq_demo.scheduler.Scheduler",
-    "DOWNLOADER": "rq_scrapy.crawlers.rq_demo.downloader.Downloader",
-    "TWISTED_REACTOR": "twisted.internet.asyncioreactor.AsyncioSelectorReactor",
-    "REACTOR_THREADPOOL_MAXSIZE": 20,
+    "SCHEDULER": "rq_scrapy.cores.rq_demo.scheduler.Scheduler",
+    "DOWNLOADER": "rq_scrapy.cores.rq_demo.downloader.Downloader",
     "RQ_TIMEOUT": 10,
 }
 
